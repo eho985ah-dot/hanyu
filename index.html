@@ -654,7 +654,8 @@ function say(text){
 const SPK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 function audioBtn(text,label){ return TTS ? `<button class="audio" data-say="${esc(text)}" aria-label="${esc(label||"Послушать")}">${SPK}</button>` : ""; }
 
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+/* Pronunciation check is switched off: iPhone speech recognition did not work in the home-screen app. */
+const SR = null;
 const MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>';
 function micBtn(text){ return SR ? `<button class="mic" data-listen="${esc(text)}" aria-label="Повторить вслух и проверить произношение">${MIC}</button>` : ""; }
 const IS_IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
