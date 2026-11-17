@@ -1286,7 +1286,7 @@ function hideHeard(){ clearTimeout(heardTimer); heardEl.hidden = true; }
 function showHeard(o){
   clearTimeout(heardTimer);
   let ttl = "", cls = "", cmp = "", sub = "";
-  if(o.state === "listen"){ ttl = "Говорите…"; cmp = esc(o.expected); sub = "Повторите фразу вслух"; }
+  if(o.state === "listen"){ ttl = "Говорите…"; cmp = esc(o.expected); sub = o.partial ? `Слышу: «${esc(o.partial)}»` : "Повторите фразу вслух. Можно говорить несколько секунд."; }
   else if(o.state === "result"){
     const b = o.best, ok = b.score === 1 && b.g.length <= o.ex.length + 1;
     cls = ok ? "ok" : "no";
@@ -1297,7 +1297,8 @@ function showHeard(o){
     cls = "no"; ttl = "Не получилось";
     sub = {"not-allowed":"Нет доступа к микрофону. Разрешите микрофон и распознавание речи в Настройках iPhone.",
            "service-not-allowed":"Распознавание речи выключено. Включите Siri и диктовку в Настройках iPhone.",
-           "no-speech":"Ничего не услышал. Нажмите на микрофон и говорите сразу.",
+           "no-speech":"Ничего не услышал. Нажмите на микрофон и говорите чуть громче.",
+           "instant":"Микрофон сразу выключился. Проверьте: Настройки → Основные → Клавиатура → «Включение диктовки» должно быть включено, а в Настройках → Конфиденциальность → Микрофон и Распознавание речи доступ разрешён. Если не поможет, откройте ссылку в Safari и попробуйте там.",
            "network":"Для распознавания речи нужен интернет.",
            "audio-capture":"Микрофон занят или недоступен."}[o.err] || "Не удалось распознать речь. Попробуйте ещё раз.";
   }
@@ -1306,29 +1307,55 @@ function showHeard(o){
   document.getElementById("heardX").onclick = () => { if(rec){ try { rec.abort(); } catch(e){} } hideHeard(); };
   if(o.state !== "listen") heardTimer = setTimeout(hideHeard, 9000);
 }
+function judge(expected, alts){
+  const ex = norm(expected);
+  let best = null;
+  for(const a of alts){
+    if(!a) continue;
+    const g = norm(a), m = matchMarks(ex, g), score = m.filter(Boolean).length / Math.max(1, ex.length), pen = Math.abs(g.length - ex.length);
+    if(!best || score > best.score || (score === best.score && pen < best.pen)) best = {a, g, m, score, pen};
+  }
+  showHeard({state:"result", ex, best});
+}
 function startListen(btn){
   if(!SR) return;
   if(rec){ try { rec.abort(); } catch(e){} rec = null; }
-  if(TTS) try { speechSynthesis.cancel(); } catch(e){}
+  /* iPhone: if a sample is still playing, the audio session is busy and recognition ends at once */
+  const speaking = TTS && (speechSynthesis.speaking || speechSynthesis.pending);
+  if(speaking){ try { speechSynthesis.cancel(); } catch(e){} setTimeout(() => beginListen(btn), 400); }
+  else beginListen(btn);
+}
+function beginListen(btn){
   const expected = btn.dataset.listen;
   const r = new SR(); rec = r;
-  r.lang = "zh-CN"; r.interimResults = false; r.maxAlternatives = 5; r.continuous = false;
-  let done = false;
+  /* continuous + interim results keep iOS listening until we stop it ourselves */
+  r.lang = "zh-CN"; r.continuous = true; r.interimResults = true; r.maxAlternatives = 5;
+  const t0 = Date.now();
+  let heard = "", finals = [], errCode = null, silence = null;
+  const hard = setTimeout(() => { try { r.stop(); } catch(e){} }, 8000);
   btn.classList.add("on"); showHeard({state:"listen", expected});
   r.onresult = e => {
-    done = true;
-    const alts = [...e.results[0]].map(a => a.transcript);
-    const ex = norm(expected);
-    let best = null;
-    for(const a of alts){
-      const g = norm(a), m = matchMarks(ex, g), score = m.filter(Boolean).length / Math.max(1, ex.length), pen = Math.abs(g.length - ex.length);
-      if(!best || score > best.score || (score === best.score && pen < best.pen)) best = {a, g, m, score, pen};
-    }
-    showHeard({state:"result", ex, best});
+    let txt = "";
+    for(let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    heard = txt;
+    const last = e.results[e.results.length - 1];
+    if(last.isFinal) finals = [...last].map(a => a.transcript);
+    showHeard({state:"listen", expected, partial:txt});
+    clearTimeout(silence);
+    silence = setTimeout(() => { try { r.stop(); } catch(e){} }, 1400);
+    if(norm(txt).length >= norm(expected).length && norm(txt).includes(norm(expected))){ try { r.stop(); } catch(e){} }
   };
-  r.onerror = e => { if(e.error === "aborted") return; done = true; showHeard({state:"error", err:e.error}); };
-  r.onend = () => { btn.classList.remove("on"); if(rec === r) rec = null; if(!done && !heardEl.hidden) showHeard({state:"error", err:"no-speech"}); };
-  try { r.start(); } catch(e){ btn.classList.remove("on"); showHeard({state:"error", err:"start"}); }
+  r.onerror = e => { errCode = e.error; };
+  r.onend = () => {
+    clearTimeout(hard); clearTimeout(silence);
+    btn.classList.remove("on");
+    if(rec === r) rec = null;
+    if(errCode === "aborted") return;
+    if(heard) return judge(expected, [heard].concat(finals));
+    if(errCode && errCode !== "no-speech") return showHeard({state:"error", err:errCode});
+    showHeard({state:"error", err: (Date.now() - t0 < 1500) ? "instant" : "no-speech"});
+  };
+  try { r.start(); } catch(e){ clearTimeout(hard); btn.classList.remove("on"); showHeard({state:"error", err:"start"}); }
 }
 
 checkHello();
