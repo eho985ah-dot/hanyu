@@ -1,0 +1,17 @@
+{
+  "name": "Учим 汉语",
+  "short_name": "Учим 汉语",
+  "description": "Карточки, тесты, письмо иероглифов, фразы и грамматика HSK 1 с общим рейтингом друзей.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f6f4",
+  "theme_color": "#c3352b",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
